@@ -30,6 +30,7 @@ class Date_time_server(object):
 
     def __init__(self, port=6969, ptype='eng'):
         self.lang = ptype
+        self.request_type = 0
         # sock_dgram for udp
         self.server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.server.bind(('', port))
@@ -57,7 +58,6 @@ class Date_time_server(object):
             for client in inputready:
 
                 message = bytearray(client.recv(BUFSIZE))
-                print((message).hex())
                 # process the packet
                 is_valid = self.check_packet(message)
                 if not is_valid:
@@ -66,17 +66,11 @@ class Date_time_server(object):
                     continue
                 # packet is valid
                 # check request type and create response packet
-                request_type = (message[4] << 0xFF) & message[5]
-                if request_type == 0x0001:
-                    # date
-                    pass
-                elif request_type == 0x0002:
-                    # time
-                    pass
-                else:
-                    print("incorrect request type")
-                    print("discarding packet")
-                    continue
+                self.request_type = (message[4] << 0xFF) & message[5]
+                # 0x0001 is date
+                response_packet = self.create_response_packet()
+                # dont need:
+                print(response_packet)
 
     def check_packet(self, packet: bytearray) -> bool:
         """checks that the packet is valid, does not check the
@@ -133,14 +127,20 @@ class Date_time_server(object):
         packet[10] = curr_hour
         # next field is the length field
         # construct the text
-        if self.lang == 'eng':
-            pass
+        text = self.construct_date_time()
+        text = text.encode("utf-8")
+        text_length = len(text)
+        # length is 8 bits
+        packet[11] = text_length
+        # text added to bytearray
+        packet = packet + text
+        return packet
 
-    def construct_date_time(self, type_flag: str) -> str:
+    def construct_date_time(self) -> str:
         """constructs the english string """
         date_time = datetime.datetime.now()
 
-        if type_flag == "date":
+        if self.request_type == 0x001:
 
             date = date_time.date.strftime("%d, %Y")
             month = date_time.date.strftime("%B")
@@ -158,7 +158,7 @@ class Date_time_server(object):
 
             return f"{lang_string} {month}, {date}"
 
-        elif type_flag == "time":
+        elif self.request_type == 0x0002:
 
             time = date_time.date.strftime("%H:%M")
             if self.lang == "eng":
