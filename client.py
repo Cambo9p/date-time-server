@@ -1,4 +1,5 @@
 import socket
+import sys
 
 BUFSIZE = 6  # size of the packet that will be recieved from server
 
@@ -17,7 +18,6 @@ class Date_time_client(object):
         """sends a request to the server"""
         request_packet = self.create_request_packet()
         self.client.send(request_packet)
-
 
     def create_request_packet(self) -> bytearray:
         """Creates the dt-request packet to send to the server"""
@@ -42,46 +42,51 @@ class Date_time_client(object):
         return request
 
 
-def get_request_type() -> str:
-    """this will see if the user wants to recieve the date or time"""
+def return_args():
+    """returns the command line argument - request_type, ip, port"""
 
-    print("Do you wish to recieve the date or time?")
-    req_type = input("")
-    if req_type.lower() != "time" and req_type.lower() != "date":
-        print("ERROR: Invalid request type")
-        print("exiting server...")
+    try:
+        request_type, ipaddress, port_number = sys.argv[1:5]
+    except ValueError:
+        print("ERROR: too many arguments given")
+
+    # check that the values are correct
+    check_request(request_type)
+    ip_addr = check_ip_addr()
+    check_port(port_number)
+
+    return request_type, ip_addr, port_number
+
+
+def check_ip_addr(ip_addr) -> str:
+    """checks to see if the ip address is valid """
+    try:
+        ip = socket.gethostbyname(ip_addr)
+    except socket.gaierror:
+        # ip address is not legal
+        print("ERROR: invalid IP address")
         quit()
-    else:
-        return req_type
+    return ip
 
 
-def get_ip_addr() -> str:
-    """queries the user for the ip address and checks if it is valid"""
-
-    pass
-
-
-def get_port_num() -> int:
-    """queries the user for the port numebr and checks if its valid"""
-
-    print("please enter the port number")
-    port = input("")
-    port = int(port)
-
+def check_port(port) -> None:
+    """checks to see if the port number is correct"""
     if port < 1024 or port > 64000:
-        print("ERROR: port must be in the range 1024-64000")
-        print("exiting server...")
+        print("ERROR: invalid port number")
         quit()
-    else:
-        return port
+
+
+def check_request(request_type) -> None:
+    """checks that the request type is valid"""
+    if request_type != "date" or request_type != "time":
+        print("ERROR: invalid request type '{}'".format(request_type))
+        quit()
 
 
 def main():
     """the main function for the client"""
 
     # req_type = get_request_type()
-    ip_addr = get_ip_addr()
-    port_num = get_port_num()
     client = Date_time_client()
     client.send_request()
 
