@@ -1,12 +1,9 @@
 """this is the server code for the date-time program - see README.md for
-details"""
-# TODO: create unit tests
-# TODO: change date string to utf-8 and put the text_length field into the
-# bytearray
+details takes the 3 port numbers as command line arguments """
 import socket
 import select
 import sys
-import datetime
+from datetime import datetime
 
 
 ENG_TO_MAO = {"January": "Kohitātea", "February": "Hui-tanguru",
@@ -26,38 +23,33 @@ BUFSIZE = 6  # size of the packet that will be recieved from client
 
 
 class Date_time_server(object):
-    """ a date time server using select"""
+    """ a date timporte server using select"""
 
     def __init__(self, port=6969, ptype='eng'):
         self.lang = ptype
         self.request_type = 0
+        self.port = port
         # sock_dgram for udp
         self.server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.server.bind(('', port))
+        self.server.bind(('127.0.0.1', port))
+        print("server running {} on port: {} ".format(self.lang,
+                                                      self. port))
 
     def start(self):
         """starts searching for connections """
 
-        inputs = [self.server, sys.stdin]
+        inputs = [self.server]
         self.outputs = []
         running = True
 
         while running:
 
-            try:
-                inputready, outputready, exceptready = select.select(
-                    inputs, self.outputs, [])
-
-            except select.error as e:
-                print(e)
-                break
-            except socket.error as e:
-                print(e)
-                break
-
+            inputready, outputready, exceptready = select.select(inputs,
+                                                                 self.outputs,
+                                                                 [])
             for client in inputready:
-
-                message = bytearray(client.recv(BUFSIZE))
+                # TODO: change vars
+                message, address = client.recvfrom(1024)
                 # process the packet
                 is_valid = self.check_packet(message)
                 if not is_valid:
@@ -66,22 +58,24 @@ class Date_time_server(object):
                     continue
                 # packet is valid
                 # check request type and create response packet
-                self.request_type = (message[4] << 0xFF) & message[5]
-                # 0x0001 is date
+                self.request_type = (message[4] << 8) | message[5]
                 response_packet = self.create_response_packet()
-                # dont need:
-                print(response_packet)
+                # test print
+                print(response_packet, " == response packet")
+                # send packet back to client
+                print("about to send response")
+                client.sendto(response_packet, address)
 
     def check_packet(self, packet: bytearray) -> bool:
         """checks that the packet is valid, does not check the
         request type """
         # check the magicNo
-        magic_n = (packet[0] << 0xFF) & packet[1]
+        magic_n = (packet[0] << 8) | packet[1]
         if magic_n != 0x497E:
             print("ERROR: the magic number is incorrrect")
             return False
         # check the packetype
-        packet_type = (packet[2] << 0xFF) & packet[3]
+        packet_type = (packet[2] << 8) | packet[3]
         if packet_type != 1:
             print("ERROR: the packet type is incorrect")
             return False
@@ -89,7 +83,12 @@ class Date_time_server(object):
 
     def create_response_packet(self) -> bytearray:
         """creates a response packet to send to the client"""
-        packet = bytearray(13)
+        # construct text
+        text = self.construct_date_time()
+        text = text.encode("utf-8")
+        text_length = len(text)
+
+        packet = bytearray(13 + text_length)
         # create magic number
         magic_number = 0x497E
         packet[0] = magic_number >> 8
@@ -110,11 +109,11 @@ class Date_time_server(object):
         packet[5] = language_code & 0xFF
 
         # date time
-        date_time = datetime.datetime.now()
-        curr_year = date_time.date.strftime("%Y")
-        curr_month = date_time.date.strftime("%m")
-        curr_day = date_time.date.strftime("%d")
-        curr_hour = date_time.date.strftime("%H")
+        now = datetime.now()
+        curr_year = int(now.strftime("%Y"))
+        curr_month = int(now.strftime("%m"))
+        curr_day = int(now.strftime("%d"))
+        curr_hour = int(now.strftime("%H"))
 
         # year
         packet[6] = curr_year >> 8
@@ -126,10 +125,6 @@ class Date_time_server(object):
         # hour
         packet[10] = curr_hour
         # next field is the length field
-        # construct the text
-        text = self.construct_date_time()
-        text = text.encode("utf-8")
-        text_length = len(text)
         # length is 8 bits
         packet[11] = text_length
         # text added to bytearray
@@ -138,12 +133,12 @@ class Date_time_server(object):
 
     def construct_date_time(self) -> str:
         """constructs the english string """
-        date_time = datetime.datetime.now()
+        date_time = datetime.now()
 
         if self.request_type == 0x001:
 
-            date = date_time.date.strftime("%d, %Y")
-            month = date_time.date.strftime("%B")
+            date = date_time.strftime("%d, %Y")
+            month = date_time.strftime("%B")
 
             if self.lang == "eng":
                 lang_string = "Todays date is "
@@ -173,17 +168,14 @@ class Date_time_server(object):
 
 def set_ports() -> tuple[int, int, int]:
     """queries the user for the port numbers"""
-
-    print("please enter the English port")
-    eng_port = input('')
+    try:
+        eng_port, ger_port, mao_port = sys.argv[1:5]
+    except ValueError:
+        print("ERROR: Incorrect number of arguments")
+        quit()
+    # check that the ports are a valid number
     is_valid_port(eng_port, 'English port')
-
-    print("please enter the Maori port")
-    mao_port = input('')
     is_valid_port(mao_port, 'Maori port')
-
-    print("please enter the German port")
-    ger_port = input('')
     is_valid_port(ger_port, 'German port')
 
     return eng_port, mao_port, ger_port
@@ -196,7 +188,11 @@ def is_valid_port(port, name):
         quit()
 
 
-if __name__ == "__main__":
-
+def main():
+    """the main function for the server"""
     eng_port, mao_port, ger_port = set_ports()
-    Date_time_server(int(eng_port)).start()
+    server = Date_time_server(int(eng_port))
+    server.start()
+
+
+main()
