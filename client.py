@@ -23,23 +23,92 @@ class Date_time_client(object):
         self.outputs = []
 
         try:
+            # final param means the client will wait 1 second for a response
             inputready, outputready, exceptready = select.select(inputs,
                                                                  self.outputs,
-                                                                 [], 10)
-            message = inputready[0].recv(1024)
-            print("message recieved: ", message)
+                                                                 [], 1)
+            response_packet = inputready[0].recv(1024)
 
         except IndexError:
             print("ERROR: more than one second to recieve response")
+            quit()
+        # check the response_packet
+        self.check_response(response_packet)
+        # print the contents of the dt response packet
+        self.print_response(response_packet)
+
+    def print_response(self, packet: bytearray) -> None:
+        """prints the fields in the dt_response_packet"""
+        print("Magic numeber: ", (packet[0] << 8) | packet[1])
+        print("packet type: ", (packet[2] << 8) | packet[3])
+        print("language code: ", (packet[4] << 8) | packet[5])
+        print("year: ", (packet[6] << 8) | packet[7])
+        print("month: ", packet[8])
+        print("day: ", packet[9])
+        print("hour: ", packet[10])
+        print("minute: ", packet[11])
+        print("length: ", packet[12])
+        print("text: ", packet[13:].decode())
+        quit()
+
+    def check_response(self, packet: bytearray) -> None:
+        """checks if the dt response packet is valid"""
+        # check that the packet has at least 13 bytes of data
+        if len(packet) < 13:
+            print("ERROR: not all header fields present")
+            quit()
+        # check the magic number
+        magic_num = (packet[0] << 8) | packet[1]
+        if magic_num != 0x497E:
+            print("ERROR: incorrect magic num '{}'".format(magic_num))
+            quit()
+        # check the packet type
+        packet_type = (packet[2] << 8) | packet[3]
+        if packet_type != 0x0002:
+            print("ERROR: incorrect packet type '{}'".format(packet_type))
+            quit()
+        # check the language code
+        language_code = (packet[4] << 8) | packet[5]
+        if (language_code != 0x0001 and language_code != 0x0002 and
+                language_code != 0x0003):
+            print("ERROR: invalid language code '{}'".format(language_code))
+            quit()
+        # check the year
+        year = (packet[6] << 8) | packet[7]
+        if year >= 2100:
+            print("ERROR: invlaid year '{}'".format(year))
+            quit()
+        # check month
+        month = (packet[8])
+        if month < 1 or month > 12:
+            print("ERROR: invalid month '{}'".format(month))
+            quit()
+        # check day
+        day = packet[9]
+        if day < 1 or day > 32:
+            print("ERROR: invalid day '{}'".format(day))
+            quit()
+        # check hour
+        hour = packet[10]
+        if hour < 0 or hour > 23:
+            print("ERROR: invalid hour '{}'".format(day))
+            quit()
+        # check minute
+        minute = packet[11]
+        if minute < 0 or minute > 59:
+            print("ERROR: invalid minute '{}'".format(minute))
+            quit()
+        # check length
+        length = packet[12]
+        if length != 13 + len(packet[13:]):
+            print("ERROR: incorrect length '{}'".format(length))
+            quit()
+        # all checks passed
 
     def send_request(self):
         """sends a request to the server"""
         request_packet = self.create_request_packet()
-        # self.client.send(request_packet)
-        print('REQUEST PACKET ', request_packet, 'ADDR ', (str(self.ip_addr),
-                                                           int(self.port)))
         self.client.sendto(request_packet, (str(self.ip_addr), int(self.port)))
-        # self.client.close()
 
     def create_request_packet(self) -> bytearray:
         """Creates the dt-request packet to send to the server"""
