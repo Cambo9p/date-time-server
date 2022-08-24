@@ -2,8 +2,6 @@ import socket
 import sys
 import select
 
-BUFSIZE = 6  # size of the packet that will be recieved from server
-
 
 class Date_time_client(object):
     """the class for the date time client"""
